@@ -27,15 +27,18 @@ def create_staff():
 
 @admin_bp.route('/staff', methods=['GET'])
 @jwt_required()
-def get_staff():
+def get_all_staff():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT id, name, email, role FROM users WHERE role = 'staff'")
+        cur.execute("SELECT id, name, email, role, created_at FROM users WHERE role = 'staff'")
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        staff = [{'id': r[0], 'name': r[1], 'email': r[2], 'role': r[3]} for r in rows]
+        staff = [
+            {'id': r[0], 'name': r[1], 'email': r[2], 'role': r[3], 'created_at': r[4].isoformat()}
+            for r in rows
+        ]
         return jsonify(staff), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
