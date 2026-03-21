@@ -42,3 +42,50 @@ def get_all_staff():
         return jsonify(staff), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/stats', methods=['GET'])
+@jwt_required()
+def get_stats():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        # Count total reports
+        cur.execute("SELECT COUNT(*) FROM reports")
+        total = cur.fetchone()[0]
+
+        # Count reports by each status
+        cur.execute("SELECT COUNT(*) FROM reports WHERE status = 'submitted'")
+        submitted = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM reports WHERE status = 'under review'")
+        under_review = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM reports WHERE status = 'in progress'")
+        in_progress = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM reports WHERE status = 'resolved'")
+        resolved = cur.fetchone()[0]
+
+        # Count users by role
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'citizen'")
+        citizens = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'staff'")
+        staff = cur.fetchone()[0]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'total_reports': total,
+            'submitted': submitted,
+            'under_review': under_review,
+            'in_progress': in_progress,
+            'resolved': resolved,
+            'total_citizens': citizens,
+            'total_staff': staff
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
