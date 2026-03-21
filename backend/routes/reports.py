@@ -99,6 +99,12 @@ def update_status(report_id):
             'UPDATE reports SET status = %s WHERE id = %s',
             (status, report_id)
         )
+        cur.execute(
+            '''INSERT INTO notifications (user_id, report_id, message)
+               SELECT citizen_id, id, 'Your report status has been updated to: ' || %s
+               FROM reports WHERE id = %s''',
+            (status, report_id)
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -125,5 +131,29 @@ def assign_department(report_id):
         cur.close()
         conn.close()
         return jsonify({'message': 'Department assigned'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@reports_bp.route('/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    user_id = int(get_jwt_identity())
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            '''SELECT id, message, is_read, sent_at
+               FROM notifications WHERE user_id = %s
+               ORDER BY sent_at DESC''',
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        notifications = [
+            {'id': r[0], 'message': r[1], 'is_read': r[2], 'sent_at': r[3].isoformat()}
+            for r in rows
+        ]
+        return jsonify(notifications), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
