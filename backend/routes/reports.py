@@ -108,3 +108,22 @@ def update_status(report_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@reports_bp.route('/<int:report_id>/department', methods=['PATCH'])
+@jwt_required()
+def assign_department(report_id):
+    data = request.get_json()
+    department = data.get('department')
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE reports SET department = %s WHERE id = %s',
+            (department, report_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'message': 'Department assigned'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
