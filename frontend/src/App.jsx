@@ -5,6 +5,8 @@ import SubmitReport from './pages/citizen/SubmitReport'
 import MyReports from './pages/citizen/MyReports'
 import Dashboard from './pages/staff/Dashboard'
 import AdminPanel from './pages/admin/AdminPanel'
+import PublicTrack from './pages/citizen/PublicTrack'
+import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
   return (
@@ -12,10 +14,28 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/submit" element={<SubmitReport />} />
-        <Route path="/my-reports" element={<MyReports />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/track" element={<PublicTrack />} />
+
+        <Route path="/submit" element={
+          <ProtectedRoute allowedRoles={['citizen', 'staff', 'admin']}>
+            <SubmitReport />
+          </ProtectedRoute>
+        } />
+        <Route path="/my-reports" element={
+          <ProtectedRoute allowedRoles={['citizen', 'staff', 'admin']}>
+            <MyReports />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute allowedRoles={['staff', 'admin']}>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminPanel />
+          </ProtectedRoute>
+        } />
       </Routes>
     </BrowserRouter>
   )

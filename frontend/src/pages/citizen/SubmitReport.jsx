@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
-import { submitReport } from '../../services/api'
+import { submitReport, getCategories, uploadReportImage, getErrorMessage, logout } from '../../services/api'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../../components/useToast'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
-// Fix default marker icon bug in Leaflet + Vite
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -15,9 +15,7 @@ L.Icon.Default.mergeOptions({
 
 function LocationPicker({ onSelect }) {
   useMapEvents({
-    click(e) {
-      onSelect(e.latlng)
-    }
+    click(e) { onSelect(e.latlng) }
   })
   return null
 }
@@ -25,7 +23,24 @@ function LocationPicker({ onSelect }) {
 export default function SubmitReport() {
   const [form, setForm] = useState({ title: '', description: '', category: '' })
   const [position, setPosition] = useState(null)
+  const [beforeImage, setBeforeImage] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [categories, setCategories] = useState([])
   const navigate = useNavigate()
+  const name = localStorage.getItem('name')
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await getCategories()
+        setCategories(res.data)
+      } catch {
+        showToast('Failed to load categories', 'error')
+      }
+    }
+    fetchCategories()
+  }, [showToast])
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -33,76 +48,121 @@ export default function SubmitReport() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!position) return alert('Please click on the map to select a location!')
+    if (!position) {
+      showToast('Please click on the map to select a location.', 'error')
+      return
+    }
+    if (loading) return
+    setLoading(true)
     try {
-      await submitReport({
+      const res = await submitReport({
         ...form,
         latitude: position.lat,
         longitude: position.lng
       })
-      alert('Report submitted successfully!')
+
+      if (beforeImage) {
+        await uploadReportImage(res.data.id, beforeImage, 'before')
+      }
+
+      showToast('Report submitted successfully!', 'success')
       navigate('/my-reports')
     } catch (err) {
-      alert('Failed to submit report. Try again.')
+      showToast(getErrorMessage(err, 'Failed to submit report. Try again.'), 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md p-8">
-        <h2 className="text-2xl font-bold mb-6">Report an Issue</h2>
-
-        <form onSubmit={handleSubmit}>
-          <input type="text" name="title" placeholder="Issue Title"
-            className="w-full border p-2 rounded mb-4"
-            onChange={handleChange} required />
-
-          <select name="category"
-            className="w-full border p-2 rounded mb-4"
-            onChange={handleChange} required>
-            <option value="">Select Category</option>
-            <option value="pothole">Pothole</option>
-            <option value="streetlight">Broken Streetlight</option>
-            <option value="graffiti">Graffiti</option>
-            <option value="dumping">Illegal Dumping</option>
-            <option value="other">Other</option>
-          </select>
-
-          <textarea name="description" placeholder="Describe the issue..."
-            className="w-full border p-2 rounded mb-4 h-24"
-            onChange={handleChange} required />
-
-          <p className="text-sm text-gray-500 mb-2">
-            📍 Click on the map to pin the issue location
-          </p>
-
-          {/* MAP */}
-          <div className="rounded overflow-hidden mb-4" style={{ height: '300px' }}>
-            <MapContainer
-              center={[41.3275, 19.8187]}
-              zoom={13}
-              style={{ height: '100%', width: '100%' }}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='© OpenStreetMap contributors'
-              />
-              <LocationPicker onSelect={setPosition} />
-              {position && <Marker position={position} />}
-            </MapContainer>
+    <div className="page">
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <span className="brand-badge">🏙️</span>
+            <div>
+              <div className="brand-title">Report an Issue</div>
+              <p className="brand-subtitle">Welcome, {name || 'Citizen'}</p>
+            </div>
           </div>
+          <div className="actions">
+            <button onClick={() => navigate('/my-reports')} className="btn btn-soft">My Reports</button>
+            <button
+              onClick={async () => {
+                await logout()
+                navigate('/')
+              }}
+              className="btn btn-danger"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
 
-          {position && (
-            <p className="text-sm text-green-600 mb-4">
-              ✅ Location selected: {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
-            </p>
-          )}
+      <section className="section">
+        <div className="container">
+          <div className="panel panel-pad" style={{ maxWidth: '860px', margin: '0 auto' }}>
+            <h2 className="title" style={{ fontSize: '1.55rem' }}>Submit new report</h2>
+            <p className="subtitle">Describe the issue clearly and pin its exact location on the map.</p>
 
-          <button type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-            Submit Report
-          </button>
-        </form>
-      </div>
+            <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
+              <div className="field">
+                <label className="label">Issue title</label>
+                <input type="text" name="title" placeholder="Streetlight broken near central park" className="input" onChange={handleChange} required />
+              </div>
+
+              <div className="field">
+                <label className="label">Category</label>
+                <select name="category" className="select" onChange={handleChange} required>
+                  <option value="">Select category</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.name.toLowerCase()}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label className="label">Description</label>
+                <textarea name="description" placeholder="Describe what happened, how severe it is, and any useful context." className="textarea" onChange={handleChange} required />
+              </div>
+
+              <div className="field">
+                <label className="label">Before image (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="input"
+                  onChange={(e) => setBeforeImage(e.target.files?.[0] || null)}
+                />
+              </div>
+
+              <p className="muted" style={{ margin: '.35rem 0 .6rem' }}>📍 Click on the map to pin the issue location</p>
+
+              <div className="map-wrap map-sm" style={{ marginBottom: '.85rem' }}>
+                <MapContainer center={[41.3275, 19.8187]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='© OpenStreetMap contributors'
+                  />
+                  <LocationPicker onSelect={setPosition} />
+                  {position && <Marker position={position} />}
+                </MapContainer>
+              </div>
+
+              {position && (
+                <p className="pill" style={{ background: '#daf9ed', color: '#0c7a4f' }}>
+                  ✅ Location selected: {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
+                </p>
+              )}
+
+              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', marginTop: '.95rem' }}>
+                {loading ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
